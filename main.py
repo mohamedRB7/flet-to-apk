@@ -1,67 +1,89 @@
 import flet as ft
+import json
+import os
+
+DATA_FILE = "products.json"
+
+# تحميل البيانات من الملف (لو موجود)
+def load_data():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+# حفظ البيانات في الملف
+def save_data(data):
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 def main(page: ft.Page):
-    # 1. إعدادات الصفحة الأساسية
-    page.title = "تطبيق Flet جميل"
-    page.theme_mode = ft.ThemeMode.LIGHT  # يمكنك التبديل إلى DARK
-    page.padding = 10
-    page.rtl = True  # تفعيل الوضع من اليمين إلى اليسار (للعربية)
+    page.title = "قارئ الباركود"
+    page.window_width = 400
+    page.window_height = 400
+    page.vertical_alignment = ft.MainAxisAlignment.CENTER
+    page.theme_mode = "light"
 
-    # 2. شريط التطبيق (AppBar)
-    page.appbar = ft.AppBar(
-        title=ft.Text("مرحبًا بك في Flet", weight=ft.FontWeight.BOLD),
-        center_title=True,
-        bgcolor=ft.Colors.BLUE_600,
-        actions=[
-            ft.IconButton(ft.Icons.SETTINGS, tooltip="الإعدادات"),
-        ]
-    )
+    data = load_data()
 
-    # 3. دالة معالج النقر على الزر العائم
-    def button_click(e):
-        # عرض شريط رسائل (SnackBar) عند النقر
-        page.snack_bar = ft.SnackBar(ft.Text("تم النقر على الزر العائم!"), duration=2000)
-        page.snack_bar.open = True
+    barcode_input = ft.TextField(label="ادخل الباركود", autofocus=True, on_submit=lambda e: read_barcode(e))
+    output_text = ft.Text(value="", size=18, color="blue")
+
+    name_field = ft.TextField(label="اسم المنتج", visible=False)
+    price_field = ft.TextField(label="السعر", visible=False)
+    save_button = ft.ElevatedButton("حفظ المنتج", visible=False)
+
+    def show_message(msg, color="blue"):
+        output_text.value = msg
+        output_text.color = color
         page.update()
 
-    # 4. الزر العائم (FloatingActionButton)
-    page.floating_action_button = ft.FloatingActionButton(
-        icon=ft.Icons.ADD,
-        on_click=button_click,
-        bgcolor=ft.Colors.AMBER_600,
-        tooltip="إضافة عنصر جديد"
-    )
+    def read_barcode(e):
+        barcode = barcode_input.value.strip()
+        if not barcode:
+            show_message("⚠️ الرجاء إدخال الباركود", "red")
+            return
 
-    # 5. محتوى الصفحة
+        if barcode in data:
+            product = data[barcode]
+            show_message(f"✅ الاسم: {product['name']} | السعر: {product['price']} جنيه", "green")
+            name_field.visible = price_field.visible = save_button.visible = False
+        else:
+            show_message("❌ باركود جديد - أدخل البيانات لحفظ المنتج", "orange")
+            name_field.visible = price_field.visible = save_button.visible = True
+            name_field.value = ""
+            price_field.value = ""
+        page.update()
+
+    def save_product(e):
+        barcode = barcode_input.value.strip()
+        name = name_field.value.strip()
+        price = price_field.value.strip()
+
+        if not (barcode and name and price):
+            show_message("⚠️ من فضلك أدخل كل البيانات", "red")
+            return
+
+        data[barcode] = {"name": name, "price": price}
+        save_data(data)
+        show_message("💾 تم حفظ المنتج بنجاح", "green")
+
+        name_field.visible = price_field.visible = save_button.visible = False
+        page.update()
+
+    save_button.on_click = save_product
+
     page.add(
-        ft.Container(
-            content=ft.Column(
-                [
-                    ft.Icon(ft.Icons.MOBILE_FRIENDLY, size=80, color=ft.Colors.BLUE_600),
-                    ft.Text(
-                        "هذا هو تطبيق موبايل بسيط وجميل!",
-                        size=20,
-                        weight=ft.FontWeight.W_500,
-                        text_align=ft.TextAlign.CENTER
-                    ),
-                    ft.Divider(),
-                    ft.ElevatedButton(
-                        text="زر أساسي",
-                        icon=ft.Icons.CHECK,
-                        bgcolor=ft.Colors.GREEN_400,
-                        color=ft.Colors.WHITE,
-                        on_click=lambda e: print("تم النقر على الزر الأساسي")
-                    ),
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=20
-            ),
-            alignment=ft.alignment.center,
-            padding=30,
+        ft.Column(
+            [
+                ft.Text("📦 قارئ الباركود", size=22, weight=ft.FontWeight.BOLD),
+                barcode_input,
+                output_text,
+                name_field,
+                price_field,
+                save_button,
+            ],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         )
     )
 
-# تشغيل التطبيق
-if __name__ == "__main__":
-    # ft.app(target=main) # للتشغيل كصفحة ويب
-    ft.app(target=main, view=ft.AppView.FLET_APP) # للتشغيل كبرنامج سطح مكتب/تطبيق موبايل (وضع المعاينة)
+ft.app(target=main)
